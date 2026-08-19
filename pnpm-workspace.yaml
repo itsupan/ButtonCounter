@@ -1,0 +1,10 @@
+# esbuild ships a platform-specific binary via its install script; without this
+# pnpm skips that script and vite/vitest fail to start.
+#
+# Both keys are set on purpose: pnpm 11 reads `allowBuilds`, while pnpm 10 (which
+# a build platform may still pin) reads `onlyBuiltDependencies`.
+allowBuilds:
+  esbuild: true
+
+onlyBuiltDependencies:
+  - esbuild
