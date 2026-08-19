@@ -58,7 +58,14 @@ before running anything that writes. Both files are gitignored.
 `.github/workflows/ci.yml` — `test` job, then a `deploy` job with `needs: test`. Push to `main`
 deploys production; any other branch deploys a preview. The deploy job is **skipped, not failed**,
 unless the repo variable `VERCEL_CONFIGURED` is `"true"`, so CI stays green before Vercel is set up.
-`.github/workflows/uptime.yml` probes production `/api/health` every 15 minutes.
+Pushes to `development` are additionally aliased to a stable
+`https://buttoncounter-dev.vercel.app`, after the health check rather than before, so the fixed
+hostname never points at a failed deployment. `.github/workflows/uptime.yml` probes production
+`/api/health` every 15 minutes.
+
+Vercel's **Development** environment is not a deploy target — it only scopes variables for
+`vercel dev`. The `development` branch deploys to **Preview**. Putting a variable on Development and
+expecting the `development` branch to read it is a trap that has already bitten once here.
 
 Vercel's own Git integration must stay **disabled** — otherwise pushes deploy twice, and the Vercel
 one bypasses the test gate entirely.

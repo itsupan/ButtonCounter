@@ -55,6 +55,18 @@ In Vercel, set them per environment so preview deploys never touch production da
 | Production         | `buttoncounter-itsupan`      |
 | Preview            | `button-counter-dev-itsupan` |
 
+Vercel exposes **three** environments but only two of them deploy:
+
+| Environment | Deployed by                                                    |
+| ----------- | -------------------------------------------------------------- |
+| Production  | pushes to `main`                                               |
+| Preview     | every other deploy — `development` and `issue-N/*` branches    |
+| Development | nothing; it is the variable scope used by `vercel dev` locally |
+
+Setting a variable on Development and expecting the `development` branch to pick it up is an easy
+mistake — that branch deploys to **Preview**. A genuine named environment per branch requires
+Vercel's Custom Environments, which is a Pro feature (Hobby accounts report a limit of 0).
+
 ## First-time setup
 
 Steps 1–2 need interactive login, so run them yourself.
@@ -108,6 +120,9 @@ above.
   - push to any other branch → **preview** deploy
   - after deploying, polls the new deployment's `/api/health` up to 5 times and fails the job if it
     never returns 200
+  - on `development` only, aliases the deployment to a stable
+    `https://buttoncounter-dev.vercel.app`. This runs _after_ the health check, so the fixed
+    hostname is never repointed at a deployment that failed its probe.
 
 Branch flow: `issue-N/slug` → `development` → `main`.
 

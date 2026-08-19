@@ -104,3 +104,12 @@ jobs:
           done
           echo "Health check never returned 200" >&2
           exit 1
+
+      - name: Alias development to a stable URL
+        # Deliberately after the health check: the fixed dev hostname should
+        # never be repointed at a deployment that failed its probe.
+        if: github.ref == 'refs/heads/development'
+        run: |
+          vercel alias set "${{ steps.deploy.outputs.url }}" buttoncounter-dev.vercel.app \
+            --token=${{ secrets.VERCEL_TOKEN }}
+          echo "Aliased to https://buttoncounter-dev.vercel.app" >> "$GITHUB_STEP_SUMMARY"
