@@ -1,8 +1,8 @@
 # Deployment
 
-ButtonCounter is a SvelteKit app deployed to Vercel as serverless functions, backed by a Turso
-(libSQL) database. Deploys are driven by GitHub Actions rather than Vercel's Git integration, so
-that tests gate every release.
+ButtonCounter is a SvelteKit app on Vercel, backed by a Turso (libSQL) database. Vercel's GitHub
+integration deploys every push; GitHub Actions runs the test suite. Untested code is kept out of
+production by **branch protection on `main`**, not by the deploy step.
 
 ## Architecture
 
@@ -12,7 +12,33 @@ that tests gate every release.
 | Runtime         | `nodejs22.x`, region `hnd1` (Tokyo)   | Both Turso databases are in `aws-ap-northeast-1`; co-locating avoids a cross-region round trip per query |
 | Database        | Turso / libSQL over `libsql://`       | Serverless SQLite                                                                                        |
 | Package manager | pnpm 11 (pinned via `packageManager`) | —                                                                                                        |
+| Deploys         | Vercel Git integration                | Stable branch URLs and PR preview comments for free                                                      |
+| Test gate       | Branch protection on `main`           | See below                                                                                                |
 | Monitoring      | `/api/health` + scheduled probe       | No third-party error tracker yet                                                                         |
+
+## How deploys work
+
+Vercel watches the repository directly:
+
+| Push to       | Vercel target | URL                              |
+| ------------- | ------------- | -------------------------------- |
+| `main`        | Production    | https://buttoncounter.vercel.app |
+| `development` | Preview       | per-deploy URL + branch alias    |
+| `issue-N/*`   | Preview       | per-deploy URL                   |
+
+**Vercel does not wait for GitHub Actions.** Both start on the same push and run in parallel, so the
+deploy step itself is not gated. What actually protects production is that `main` is a protected
+branch requiring the `Lint, typecheck, test, build` check to pass before anything can merge into it.
+Nothing untested reaches `main`, therefore nothing untested reaches Production.
+
+Two consequences worth knowing:
+
+- The check name in `.github/workflows/ci.yml` is load-bearing. The protection rule matches the job
+  by name, so renaming the job silently disables the gate.
+- `enforce_admins` is on, so direct pushes to `main` are refused even for owners. Merge through a PR.
+  To bypass in an emergency, turn protection off, push, and turn it back on.
+
+Branch flow: `issue-N/slug` → `development` → `main`.
 
 ## Local development
 
@@ -36,95 +62,31 @@ pnpm run lint && pnpm run check && pnpm run test && pnpm run build
 
 ## Environment variables
 
-Two variables, defined in `.env.example`:
+Two variables, documented in `.env.example`:
 
 | Variable      | Purpose               |
 | ------------- | --------------------- |
 | `TURSO_URL`   | libSQL connection URL |
 | `TURSO_TOKEN` | Turso auth token      |
 
-Vite picks the file by mode: `pnpm run dev` reads `.env.development`, `pnpm run build` reads
-`.env.production`. Both are gitignored. They are read at runtime through `$env/dynamic/private`,
-so the build never needs real credentials — a missing variable surfaces as a failing request,
-not a failing build.
+Vite picks the local file by mode: `pnpm run dev` reads `.env.development`, `pnpm run build` reads
+`.env.production`. Both are gitignored. They are read at runtime through `$env/dynamic/private`, so
+the build never needs real credentials — a missing variable surfaces as a failing request, not a
+failing build.
 
-In Vercel, set them per environment so preview deploys never touch production data:
+Vercel exposes **three** environments and only two of them deploy:
 
-| Vercel environment | Database                     |
-| ------------------ | ---------------------------- |
-| Production         | `buttoncounter-itsupan`      |
-| Preview            | `button-counter-dev-itsupan` |
+| Environment | Deployed by                                        | Database                     |
+| ----------- | -------------------------------------------------- | ---------------------------- |
+| Production  | pushes to `main`                                   | `buttoncounter-itsupan`      |
+| Preview     | every other deploy — `development`, `issue-N/*`    | `button-counter-dev-itsupan` |
+| Development | nothing; scopes variables for `vercel dev` locally | —                            |
 
-Vercel exposes **three** environments but only two of them deploy:
+Setting a variable on Development and expecting the `development` branch to read it is an easy
+mistake: that branch deploys to **Preview**. A genuine named environment per branch needs Vercel's
+Custom Environments, a Pro feature (Hobby accounts report a limit of 0).
 
-| Environment | Deployed by                                                    |
-| ----------- | -------------------------------------------------------------- |
-| Production  | pushes to `main`                                               |
-| Preview     | every other deploy — `development` and `issue-N/*` branches    |
-| Development | nothing; it is the variable scope used by `vercel dev` locally |
-
-Setting a variable on Development and expecting the `development` branch to pick it up is an easy
-mistake — that branch deploys to **Preview**. A genuine named environment per branch requires
-Vercel's Custom Environments, which is a Pro feature (Hobby accounts report a limit of 0).
-
-## First-time setup
-
-Steps 1–2 need interactive login, so run them yourself.
-
-**1. Link the Vercel project**
-
-```bash
-vercel login
-vercel link
-```
-
-This writes `.vercel/project.json` (gitignored) containing `orgId` and `projectId`.
-
-**2. Create a Vercel token** at https://vercel.com/account/tokens.
-
-**3. Add GitHub secrets**
-
-```bash
-gh secret set VERCEL_TOKEN      --repo itsupan/ButtonCounter
-gh secret set VERCEL_ORG_ID     --repo itsupan/ButtonCounter   # orgId
-gh secret set VERCEL_PROJECT_ID --repo itsupan/ButtonCounter   # projectId
-```
-
-**4. Enable deploys and the uptime probe**
-
-```bash
-gh variable set VERCEL_CONFIGURED --body "true" --repo itsupan/ButtonCounter
-gh variable set PRODUCTION_URL --body "https://<your-project>.vercel.app" --repo itsupan/ButtonCounter
-```
-
-Until `VERCEL_CONFIGURED` is `true` the deploy job is **skipped rather than failed**, so CI stays
-green before Vercel exists. Same for `PRODUCTION_URL` and the uptime workflow.
-
-**5. Set the Turso variables in Vercel** (Project → Settings → Environment Variables) per the table
-above.
-
-**6. Disable Vercel's Git integration** (Project → Settings → Git).
-
-> This step is not optional. Left on, every push deploys twice — once from Vercel directly,
-> bypassing the tests entirely, and once from Actions. Turning it off is what makes "tests run
-> before deployment" actually true.
-
-## How the pipeline works
-
-`.github/workflows/ci.yml` has two jobs:
-
-- **test** — runs on every push and on PRs into `main`/`development`: lint, typecheck, unit tests,
-  build.
-- **deploy** — `needs: test`, so it cannot start on a red build.
-  - push to `main` → **production** deploy
-  - push to any other branch → **preview** deploy
-  - after deploying, polls the new deployment's `/api/health` up to 5 times and fails the job if it
-    never returns 200
-  - on `development` only, aliases the deployment to a stable
-    `https://buttoncounter-dev.vercel.app`. This runs _after_ the health check, so the fixed
-    hostname is never repointed at a deployment that failed its probe.
-
-Branch flow: `issue-N/slug` → `development` → `main`.
+Pointing Preview at the dev database is what keeps PR deploys off production data.
 
 ## Rollback
 
@@ -133,8 +95,8 @@ vercel ls                              # list deployments
 vercel promote <deployment-url>        # promote a known-good one to production
 ```
 
-Or in the dashboard: Deployments → pick a previous one → Promote to Production. Rolling back the
-app does **not** roll back the database.
+Or in the dashboard: Deployments → pick a previous one → Promote to Production. Rolling back the app
+does **not** roll back the database.
 
 ## Monitoring
 
@@ -143,24 +105,28 @@ app does **not** roll back the database.
 - `200 {"status":"ok","db":"ok","timestamp":...}` — the app answered and `SELECT 1` succeeded
 - `503 {"status":"degraded","db":"error","timestamp":...}` — the database was unreachable
 
-Failure detail is written to the Vercel function logs, deliberately not to the response body, so
-the connection URL and token stay private.
+Failure detail goes to the Vercel function logs, deliberately not to the response body, so the
+connection URL and token stay private.
 
-`.github/workflows/uptime.yml` probes it every 15 minutes, retries once, and on failure opens a
-`uptime`-labelled issue (or comments on the open one, rather than filing a duplicate every 15
-minutes during an outage).
+`.github/workflows/uptime.yml` probes the `PRODUCTION_URL` repository variable every 15 minutes,
+retries once, and on failure opens a `uptime`-labelled issue (or comments on the open one, rather
+than filing a duplicate every 15 minutes during an outage).
 
 ## Troubleshooting
 
-**Deploy job was skipped** — `VERCEL_CONFIGURED` is not set to `true`, or the push was not a push
-event. This is the expected state before first-time setup.
+**A deployment URL returns 302** — Vercel protects per-deployment URLs
+(`buttoncounter-<hash>-….vercel.app`) behind Vercel Authentication by default. The stable production
+alias `buttoncounter.vercel.app` is public. For automated checks against protected URLs, enable
+Settings → Deployment Protection → Protection Bypass for Automation and send the secret as a header.
 
-**Health check returns 503 in production** — the Turso variables are missing or wrong in that
-Vercel environment. Check the function logs for the `[health]` line, which carries the real error.
+**Health returns 503 on a preview deploy** — `TURSO_TOKEN` is probably missing from the **Preview**
+environment. Check the function logs for the `[health]` line, which carries the real error.
 
-**`ERR_PNPM_IGNORED_BUILDS` during install** — esbuild's install script was skipped. It is allowed
-in `pnpm-workspace.yaml`; if that file is missing the binary never lands and vite fails to start.
+**A PR cannot be merged into `main`** — the CI check has not passed, or the branch is behind
+(`strict` is on, so update the branch first).
 
-**`npm audit` reports a `cookie` advisory** — a low-severity transitive issue via `@sveltejs/kit`.
-Do not run `audit fix --force`: its "fix" downgrades SvelteKit to 0.0.30 and destroys the project.
-It resolves when SvelteKit ships an updated dependency.
+**`ERR_PNPM_IGNORED_BUILDS` during install** — esbuild's install script was skipped. It is allowed in
+`pnpm-workspace.yaml`; if that file is missing the binary never lands and vite fails to start.
+
+**`npm audit` reports a `cookie` advisory** — a low-severity transitive issue via `@sveltejs/kit`. Do
+not run `audit fix --force`: its "fix" downgrades SvelteKit to 0.0.30 and destroys the project.

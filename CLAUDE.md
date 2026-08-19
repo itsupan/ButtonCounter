@@ -55,24 +55,31 @@ before running anything that writes. Both files are gitignored.
 
 ## Deployment
 
-`.github/workflows/ci.yml` — `test` job, then a `deploy` job with `needs: test`. Push to `main`
-deploys production; any other branch deploys a preview. The deploy job is **skipped, not failed**,
-unless the repo variable `VERCEL_CONFIGURED` is `"true"`, so CI stays green before Vercel is set up.
-Pushes to `development` are additionally aliased to a stable
-`https://buttoncounter-dev.vercel.app`, after the health check rather than before, so the fixed
-hostname never points at a failed deployment. `.github/workflows/uptime.yml` probes production
-`/api/health` every 15 minutes.
+**Vercel's Git integration deploys, not GitHub Actions.** Both start on the same push and run in
+parallel, so the deploy is not gated by CI. What keeps untested code out of production is branch
+protection on `main` requiring the `Lint, typecheck, test, build` check. That check name is
+load-bearing — renaming the job in `.github/workflows/ci.yml` silently disables the gate.
+`enforce_admins` is on, so `main` takes merges via PR only, even for owners.
+
+| Push to       | Vercel target | URL                              |
+| ------------- | ------------- | -------------------------------- |
+| `main`        | Production    | https://buttoncounter.vercel.app |
+| `development` | Preview       | per-deploy URL                   |
+| `issue-N/*`   | Preview       | per-deploy URL                   |
 
 Vercel's **Development** environment is not a deploy target — it only scopes variables for
 `vercel dev`. The `development` branch deploys to **Preview**. Putting a variable on Development and
 expecting the `development` branch to read it is a trap that has already bitten once here.
 
-Vercel's own Git integration must stay **disabled** — otherwise pushes deploy twice, and the Vercel
-one bypasses the test gate entirely.
+Per-deployment URLs (`buttoncounter-<hash>-….vercel.app`) sit behind Vercel Authentication and return
+302; only the stable `buttoncounter.vercel.app` alias is public. Automated checks must target the
+alias or use a protection-bypass secret.
+
+`.github/workflows/uptime.yml` probes the `PRODUCTION_URL` repo variable every 15 minutes.
 
 Branch flow: `issue-N/slug` → `development` → `main`.
 
-Full setup, secrets matrix, and rollback: `docs/DEPLOYMENT.md`.
+Full setup, rollback, and troubleshooting: `docs/DEPLOYMENT.md`.
 
 ## Gotchas
 

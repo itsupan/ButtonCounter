@@ -27,7 +27,7 @@ http://localhost:5173 serves the page; `/api/health` reports database connectivi
 | `pnpm run test`      | Unit tests (Vitest, single run) |
 | `pnpm run test:unit` | Unit tests in watch mode        |
 
-CI runs `lint`, `check`, `test` and `build` on every push, and deploys only if all four pass.
+CI runs `lint`, `check`, `test` and `build` on every push. Vercel deploys every push independently; `main` is branch-protected on the CI check, so only tested code reaches production. Live at <https://buttoncounter.vercel.app>.
 
 ## Layout
 
@@ -35,7 +35,7 @@ CI runs `lint`, `check`, `test` and `build` on every push, and deploys only if a
 src/lib/server/db.ts        libSQL client (lazily constructed)
 src/routes/+page.svelte     hello-world page
 src/routes/api/health/      health endpoint + its tests
-.github/workflows/ci.yml    test gate + Vercel deploy
+.github/workflows/ci.yml    lint, typecheck, test, build
 .github/workflows/uptime.yml  scheduled health probe
 ```
 
