@@ -5,7 +5,10 @@
 
 <svelte:head>
 	<title>ButtonCounter - Interactive App</title>
-	<meta name="description" content="A beautiful and interactive button counter built with Svelte 5." />
+	<meta
+		name="description"
+		content="A beautiful and interactive button counter built with Svelte 5."
+	/>
 </svelte:head>
 
 <main>
@@ -13,9 +16,9 @@
 		<h1>Button Counter App</h1>
 		<p>Experience the speed of Svelte 5 Runes.</p>
 	</div>
-	
+
 	<ButtonCounter />
-	
+
 	<div>
 		<a href={resolve('/api/health')}>System Health Check</a>
 	</div>

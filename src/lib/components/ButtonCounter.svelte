@@ -27,13 +27,9 @@
 	</div>
 
 	<div>
-		<button onclick={decrement} aria-label="Decrease counter">
-			-
-		</button>
-		
-		<button onclick={increment} aria-label="Increase counter">
-			+
-		</button>
+		<button onclick={decrement} aria-label="Decrease counter"> - </button>
+
+		<button onclick={increment} aria-label="Increase counter"> + </button>
 	</div>
 
 	{#if count !== 0}
