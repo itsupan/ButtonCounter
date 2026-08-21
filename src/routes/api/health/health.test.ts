@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const execute = vi.fn();
+const run = vi.fn();
 
 vi.mock('$lib/server/db', () => ({
-	getDb: () => ({ execute })
+	getDb: () => ({ run })
 }));
 
 // The handler ignores its RequestEvent, so an empty stand-in keeps the test
@@ -15,22 +15,22 @@ const invoke = async () => {
 
 describe('GET /api/health', () => {
 	beforeEach(() => {
-		execute.mockReset();
+		run.mockReset();
 	});
 
 	it('reports ok when the database answers', async () => {
-		execute.mockResolvedValue({ rows: [{ 1: 1 }] });
+		run.mockResolvedValue({ rows: [{ 1: 1 }] });
 
 		const response = await invoke();
 
 		expect(response.status).toBe(200);
 		await expect(response.json()).resolves.toMatchObject({ status: 'ok', db: 'ok' });
-		expect(execute).toHaveBeenCalledWith('SELECT 1');
+		expect(run).toHaveBeenCalledWith('SELECT 1');
 	});
 
 	it('reports 503 when the database is unreachable', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
-		execute.mockRejectedValue(new Error('connection refused'));
+		run.mockRejectedValue(new Error('connection refused'));
 
 		const response = await invoke();
 
@@ -40,7 +40,7 @@ describe('GET /api/health', () => {
 
 	it('keeps database detail out of the response body', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
-		execute.mockRejectedValue(new Error('libsql://secret-host.turso.io unreachable'));
+		run.mockRejectedValue(new Error('libsql://secret-host.turso.io unreachable'));
 
 		const body = await (await invoke()).text();
 
