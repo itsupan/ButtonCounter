@@ -13,7 +13,11 @@
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
 		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
+		"test": "npm run test:unit -- --run",
+		"db:generate": "drizzle-kit generate",
+		"db:push:dev": "dotenv -e .env.development -- drizzle-kit push",
+		"db:studio:dev": "dotenv -e .env.development -- drizzle-kit studio",
+		"db:push:prod": "dotenv -e .env.production -- drizzle-kit push"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
