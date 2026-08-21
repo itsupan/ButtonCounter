@@ -13,7 +13,7 @@ export const GET: RequestHandler = async () => {
 	const timestamp = new Date().toISOString();
 
 	try {
-		await getDb().execute('SELECT 1');
+		await getDb().run('SELECT 1');
 
 		return json({ status: 'ok', db: 'ok', timestamp });
 	} catch (error) {
