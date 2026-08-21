@@ -88,6 +88,21 @@ Custom Environments, a Pro feature (Hobby accounts report a limit of 0).
 
 Pointing Preview at the dev database is what keeps PR deploys off production data.
 
+## Database schema
+
+Schema changes live as plain `.sql` files in `migrations/`, applied by `scripts/migrate.mjs` (uses
+`@libsql/client`, already a dependency — no migration framework). Each file is idempotent
+(`CREATE TABLE IF NOT EXISTS`), so rerunning is safe.
+
+```bash
+node --env-file=.env.development scripts/migrate.mjs   # dev database
+node --env-file=.env.production scripts/migrate.mjs    # prod database
+```
+
+`pnpm run db:migrate` runs the same script but expects `TURSO_URL`/`TURSO_TOKEN` already in the
+environment (e.g. exported in the shell, or via Vercel's environment when run from a deploy step) —
+prefer the `--env-file` form above for local runs against a specific `.env.*` file.
+
 ## Rollback
 
 ```bash
