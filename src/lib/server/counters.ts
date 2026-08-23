@@ -43,12 +43,14 @@ export function parseCounterId(raw: string): number | undefined {
 }
 
 export async function listCounters(): Promise<Counter[]> {
-	const result = await getDb().execute(`SELECT ${SELECT_COLUMNS} FROM counters ORDER BY id`);
+	const result = await getDb().$client.execute(
+		`SELECT ${SELECT_COLUMNS} FROM counters ORDER BY id`
+	);
 	return result.rows.map(mapRow);
 }
 
 export async function getCounterById(id: number): Promise<Counter | undefined> {
-	const result = await getDb().execute({
+	const result = await getDb().$client.execute({
 		sql: `SELECT ${SELECT_COLUMNS} FROM counters WHERE id = ?`,
 		args: [id]
 	});
@@ -57,7 +59,7 @@ export async function getCounterById(id: number): Promise<Counter | undefined> {
 }
 
 export async function createCounter(input: { name: string; value?: number }): Promise<Counter> {
-	const result = await getDb().execute({
+	const result = await getDb().$client.execute({
 		sql: `INSERT INTO counters (name, value) VALUES (?, ?) RETURNING ${SELECT_COLUMNS}`,
 		args: [input.name, input.value ?? 0]
 	});
@@ -74,7 +76,7 @@ export async function updateCounter(
 	id: number,
 	input: { name?: string; value?: number }
 ): Promise<Counter | undefined> {
-	const result = await getDb().execute({
+	const result = await getDb().$client.execute({
 		sql: `UPDATE counters
 		      SET name = COALESCE(?, name),
 		          value = COALESCE(?, value),
@@ -88,7 +90,7 @@ export async function updateCounter(
 }
 
 export async function deleteCounter(id: number): Promise<Counter | undefined> {
-	const result = await getDb().execute({
+	const result = await getDb().$client.execute({
 		sql: `DELETE FROM counters WHERE id = ? RETURNING ${SELECT_COLUMNS}`,
 		args: [id]
 	});
@@ -97,7 +99,7 @@ export async function deleteCounter(id: number): Promise<Counter | undefined> {
 }
 
 async function shiftCounterValue(id: number, delta: 1 | -1): Promise<Counter | undefined> {
-	const result = await getDb().execute({
+	const result = await getDb().$client.execute({
 		sql: `UPDATE counters
 		      SET value = value + (?),
 		          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

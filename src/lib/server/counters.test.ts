@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const execute = vi.fn();
 
 vi.mock('$lib/server/db', () => ({
-	getDb: () => ({ execute })
+	getDb: () => ({ $client: { execute } })
 }));
 
 import {
