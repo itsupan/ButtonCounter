@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const execute = vi.fn();
 
+// getDb() returns a Drizzle instance; the raw libSQL client hangs off `$client`.
 vi.mock('$lib/server/db', () => ({
 	getDb: () => ({ $client: { execute } })
 }));

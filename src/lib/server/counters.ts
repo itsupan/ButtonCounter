@@ -1,3 +1,6 @@
+// These queries are hand-written SQL, so they go through the raw libSQL client
+// rather than the query builder. `getDb()` returns a Drizzle instance, which
+// exposes that client as `$client`.
 import { getDb } from '$lib/server/db';
 import type { Row } from '@libsql/client';
 
