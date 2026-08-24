@@ -1,6 +1,6 @@
 # Testing
 
-ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 6 test
+ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 7 test
 files run against mocked dependencies — no test in the suite talks to a real Turso database.
 
 ## Running tests
@@ -17,14 +17,15 @@ calling work done.
 
 ## How the suite is structured
 
-| Test file                                                  | Covers                                                                                   |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `src/lib/server/counters.test.ts`                          | `src/lib/server/counters.ts` — data access layer and `parseCounterId`/`isRecord` helpers |
-| `src/routes/api/counters/counters.test.ts`                 | `GET`/`POST /api/counters`                                                               |
-| `src/routes/api/counters/[id]/counter.test.ts`             | `GET`/`PUT`/`DELETE /api/counters/:id`                                                   |
-| `src/routes/api/counters/[id]/increment/increment.test.ts` | `POST /api/counters/:id/increment`                                                       |
-| `src/routes/api/counters/[id]/decrement/decrement.test.ts` | `POST /api/counters/:id/decrement`                                                       |
-| `src/routes/api/health/health.test.ts`                     | `GET /api/health`                                                                        |
+| Test file                                                  | Covers                                                                                                         |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `src/lib/server/counters.test.ts`                          | `src/lib/server/counters.ts` — data access layer plus the `parseCounterId`/`isRecord`/`parseListQuery` helpers |
+| `src/lib/server/runtime-info.test.ts`                      | `src/lib/server/runtime-info.ts` — build identity and instance uptime                                          |
+| `src/routes/api/counters/counters.test.ts`                 | `GET`/`POST /api/counters`                                                                                     |
+| `src/routes/api/counters/[id]/counter.test.ts`             | `GET`/`PUT`/`DELETE /api/counters/:id`                                                                         |
+| `src/routes/api/counters/[id]/increment/increment.test.ts` | `POST /api/counters/:id/increment`                                                                             |
+| `src/routes/api/counters/[id]/decrement/decrement.test.ts` | `POST /api/counters/:id/decrement`                                                                             |
+| `src/routes/api/health/health.test.ts`                     | `GET /api/health`                                                                                              |
 
 Vitest is configured (in `vite.config.ts`, there is no separate `vitest.config.ts`) with one
 project named `server`, `environment: 'node'`, matching `src/**/*.{test,spec}.{js,ts}` and
@@ -55,13 +56,26 @@ vi.mock('$lib/server/counters', async (importOriginal) => {
 });
 ```
 
-`importOriginal` is spread first so unmocked exports (like `parseCounterId`, which the route
-handlers call directly) keep their real implementation — only the specific data-access functions
-under test are replaced. This isolates request parsing, validation, and status-code selection from
-persistence.
+`importOriginal` is spread first so unmocked exports (like `parseCounterId` and `parseListQuery`,
+which the route handlers call directly) keep their real implementation — only the specific
+data-access functions under test are replaced. This isolates request parsing, validation, and
+status-code selection from persistence. It also means `GET /api/counters`'s `400` responses are
+produced by the real query parser, not a stub.
 
 `/api/health` mocks `$lib/server/db` directly (like `counters.test.ts`) since it runs `SELECT 1`
 itself rather than going through the `counters` module.
+
+**Environment-dependent tests** (`runtime-info.test.ts`) mock SvelteKit's env module. The factory
+passed to `vi.mock` is hoisted above ordinary declarations, so the stand-in object has to be created
+with `vi.hoisted`:
+
+```ts
+const env = vi.hoisted(() => ({}) as Record<string, string | undefined>);
+vi.mock('$env/dynamic/private', () => ({ env }));
+```
+
+Mutating `env` between tests then exercises both the deployed case (the `VERCEL_*` variables set)
+and local development (all of them absent).
 
 ## What each route's tests check
 
