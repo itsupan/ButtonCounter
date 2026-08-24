@@ -113,8 +113,10 @@ failure detail server-side only.
 
 ## Database migrations
 
-Schema lives in `migrations/*.sql`, applied in filename order by `scripts/migrate.mjs`. Since it's
-a plain Node script (not run through Vite), it doesn't get the mode-based `.env.development` /
+Schema lives in `migrations/*.sql`, applied in filename order by `scripts/migrate.mjs`. Only
+hand-written files belong there — drizzle-kit's generated output goes to the gitignored `drizzle/`
+instead, so it cannot slip into the sequence (see `docs/DATABASE.md`). Since it's a plain Node
+script (not run through Vite), it doesn't get the mode-based `.env.development` /
 `.env.production` selection described in the main `CLAUDE.md` — load an env file explicitly:
 
 ```sh

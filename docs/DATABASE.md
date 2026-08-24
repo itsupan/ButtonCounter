@@ -74,7 +74,7 @@ pnpm exec dotenv -e .env.development -- drizzle-kit pull --out=/tmp/introspect
 | ------------------------ | ------------------------------------------------- | --------------------- |
 | `pnpm run db:push:dev`   | Diffs `schema.ts` against dev and applies the DDL | **Yes — dev**         |
 | `pnpm run db:push:prod`  | The same, against production                      | **Yes — production**  |
-| `pnpm run db:generate`   | Writes versioned SQL into `migrations/`           | No                    |
+| `pnpm run db:generate`   | Writes versioned SQL into `drizzle/`              | No                    |
 | `pnpm run db:studio:dev` | Opens Drizzle Studio against dev                  | Reads dev             |
 
 `push` is the normal path for this project. It prints the statements it intends to run and prompts
@@ -83,14 +83,23 @@ before anything that loses data. Useful flags, passed straight through by pnpm:
 avoid).
 
 **`db:generate` is not currently a working migration path.** It runs without credentials, because it
-only reads `schema.ts` — but there is no `db:migrate` script, so nothing applies what it writes. It
-also has no `dotenv` wrapper and `migrations/` is not gitignored, so running it leaves untracked
-files behind. Prefer `push` unless you are deliberately introducing the versioned workflow.
+only reads `schema.ts` — but nothing applies what it writes. Prefer `push` unless you are
+deliberately introducing the versioned workflow.
 
-Worse, its `out` is `./migrations`, the same directory `scripts/migrate.mjs` replays in sorted
-order. A generated `0000_*.sql` would therefore sort _ahead_ of the hand-written
-`0001_create_counters.sql` and run first. If you do run `db:generate`, send it elsewhere
-(`--out=/tmp/...`) or delete what it leaves behind.
+### Two directories, two systems
+
+| Directory     | Holds                               | Applied by                               | In git     |
+| ------------- | ----------------------------------- | ---------------------------------------- | ---------- |
+| `migrations/` | hand-written `.sql`                 | `scripts/migrate.mjs`, in filename order | tracked    |
+| `drizzle/`    | whatever `db:generate`/`pull` emits | nothing                                  | gitignored |
+
+They are kept apart on purpose. `drizzle-kit`'s `out` used to be `./migrations` — the same directory
+`migrate.mjs` replays — and drizzle-kit numbers its output from `0000`, so a generated file would
+have sorted _ahead_ of the hand-written `0001_create_counters.sql` and been applied first. Pointing
+`out` at `./drizzle` makes that collision impossible; `migrate.mjs` only ever sees files a human put
+there.
+
+Nothing reads `drizzle/`, so it is safe to delete at any time.
 
 ## Verify the target before you write
 
@@ -168,4 +177,4 @@ await getDb().run('SELECT 1'); // string args are wrapped in sql.raw() internall
 | Push succeeded but the change is on the wrong database       | `TURSO_URL` exported in your shell shadowed the env file; see the override trap                                |
 | `Property 'execute' does not exist on type 'LibSQLDatabase'` | Use `.run()` — see above                                                                                       |
 | `/api/health` returns 503 locally                            | `.env.development` missing or unreachable; detail is in the server console, deliberately not the response body |
-| Untracked `migrations/` appears                              | Something ran `db:generate`; safe to delete unless you are adopting versioned migrations                       |
+| A `drizzle/` directory appears                               | Something ran `db:generate` or `db:pull`; gitignored and applied by nothing — safe to delete                   |
