@@ -1,16 +1,62 @@
 import { json } from '@sveltejs/kit';
-import { createCounter, isRecord, listCounters } from '$lib/server/counters';
+import {
+	countCounters,
+	createCounter,
+	isRecord,
+	listCounters,
+	parseListQuery
+} from '$lib/server/counters';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async () => {
+// The UI polls this route every two seconds, so a CDN caching it would pin every
+// other client to a stale count.
+const NO_STORE = { 'Cache-Control': 'no-store' };
+
+/**
+ * Lists counters, optionally paged, sorted and filtered.
+ *
+ * With no query parameters the `data` array is exactly what it has always been —
+ * every counter ordered by id — so existing consumers are unaffected. `meta`
+ * describes the whole match rather than the returned page, which is why
+ * `totalCount` and `totalValue` come from a separate aggregate query.
+ */
+export const GET: RequestHandler = async ({ url }) => {
+	const parsed = parseListQuery(url);
+
+	if (!parsed.ok) {
+		return json(
+			{ error: { message: parsed.message, code: 'invalid_query' } },
+			{ status: 400, headers: NO_STORE }
+		);
+	}
+
+	const { options } = parsed;
+
 	try {
-		const counters = await listCounters();
-		return json({ data: counters });
+		const [counters, totals] = await Promise.all([listCounters(options), countCounters(options)]);
+
+		return json(
+			{
+				data: counters,
+				meta: {
+					count: counters.length,
+					totalCount: totals.totalCount,
+					totalValue: totals.totalValue,
+					generatedAt: new Date().toISOString(),
+					limit: options.limit,
+					offset: options.offset,
+					sort: options.sort,
+					order: options.order,
+					name: options.name
+				}
+			},
+			{ headers: NO_STORE }
+		);
 	} catch (error) {
 		console.error('[counters] list failed:', error);
 		return json(
 			{ error: { message: 'Failed to list counters', code: 'internal_error' } },
-			{ status: 500 }
+			{ status: 500, headers: NO_STORE }
 		);
 	}
 };

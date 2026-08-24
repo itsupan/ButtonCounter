@@ -8,6 +8,10 @@ node_modules
 /.svelte-kit
 /build
 
+# drizzle-kit scratch output (db:generate, db:pull). Nothing applies it — the
+# migrations that do get applied are hand-written in /migrations. See docs/DATABASE.md.
+/drizzle
+
 # OS
 .DS_Store
 Thumbs.db

@@ -12,7 +12,7 @@ For how the app itself ships, see `docs/DEPLOYMENT.md`.
 | ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
 | Database    | Turso / libSQL, `aws-ap-northeast-1` | Serverless SQLite; Vercel functions are pinned to `hnd1` to sit beside it     |
 | Driver      | `@libsql/client`                     | Speaks `libsql://` over HTTP                                                  |
-| ORM         | `drizzle-orm`                        | Typed queries generated from one schema definition                            |
+| ORM         | `drizzle-orm`                        | Connection handling and typing; the counter queries are hand-written SQL      |
 | Schema tool | `drizzle-kit`                        | Diffs `schema.ts` against a live database and emits the DDL                   |
 | Env loading | `dotenv-cli`                         | drizzle-kit is not a Vite process, so it cannot use Vite's `.env.*` selection |
 
@@ -32,16 +32,41 @@ fill in values from the Turso dashboard.
 
 ## Schema
 
-`src/lib/server/schema.ts` is the single source of truth — there is no hand-written SQL. It
-currently defines one table:
+One table, `counters`, created by `migrations/0001_create_counters.sql`:
 
-| Column       | Type      | Notes                                     |
-| ------------ | --------- | ----------------------------------------- |
-| `id`         | `text`    | primary key                               |
-| `name`       | `text`    | not null, unique                          |
-| `count`      | `integer` | not null, defaults to `0`                 |
-| `created_at` | `text`    | not null, defaults to `CURRENT_TIMESTAMP` |
-| `updated_at` | `text`    | not null, defaults to `CURRENT_TIMESTAMP` |
+| Column       | Type      | Notes                                                               |
+| ------------ | --------- | ------------------------------------------------------------------- |
+| `id`         | `integer` | primary key, autoincrement                                          |
+| `name`       | `text`    | not null — deliberately **not** unique, and there is no index on it |
+| `value`      | `integer` | not null, defaults to `0`                                           |
+| `created_at` | `text`    | not null, defaults to `(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`     |
+| `updated_at` | `text`    | not null, defaults to `(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`     |
+
+The timestamp default is ISO-8601 with milliseconds, **not** `CURRENT_TIMESTAMP` — SQLite's
+`CURRENT_TIMESTAMP` yields `YYYY-MM-DD HH:MM:SS`, a different format from what the API returns.
+
+`src/lib/server/schema.ts` mirrors this table for drizzle-kit's benefit, but it is neither the only
+place SQL lives nor the definition the app runs on:
+
+- Request-time queries are hand-written SQL in `src/lib/server/counters.ts`, executed through the
+  raw libSQL client (`getDb().$client`). They never go through Drizzle's query builder.
+- The table was created by the hand-written `migrations/0001_create_counters.sql`, applied with
+  `node --env-file=.env.development scripts/migrate.mjs`.
+
+**That combination is the trap.** Because nothing reads `schema.ts` at request time, an error in it
+cannot fail a test or break an endpoint — it stays invisible until `db:push` diffs it against a live
+database and emits DDL to close the gap. A wrong column name there is a `DROP COLUMN` against
+production. This file did drift once, describing a `text` id and a `count` column that never
+existed; a push would have destroyed the real `value` data.
+
+`src/lib/server/schema.test.ts` is the guard: it asserts the table's inferred row type is exactly
+the `Counter` type the API returns, so the next drift fails `pnpm run check` instead of a
+deployment. To re-check the file against a real database without writing to it, `drizzle-kit pull`
+introspects into a scratch directory — it only reads:
+
+```bash
+pnpm exec dotenv -e .env.development -- drizzle-kit pull --out=/tmp/introspect
+```
 
 ## Applying a schema change
 
@@ -49,7 +74,7 @@ currently defines one table:
 | ------------------------ | ------------------------------------------------- | --------------------- |
 | `pnpm run db:push:dev`   | Diffs `schema.ts` against dev and applies the DDL | **Yes — dev**         |
 | `pnpm run db:push:prod`  | The same, against production                      | **Yes — production**  |
-| `pnpm run db:generate`   | Writes versioned SQL into `migrations/`           | No                    |
+| `pnpm run db:generate`   | Writes versioned SQL into `drizzle/`              | No                    |
 | `pnpm run db:studio:dev` | Opens Drizzle Studio against dev                  | Reads dev             |
 
 `push` is the normal path for this project. It prints the statements it intends to run and prompts
@@ -58,9 +83,23 @@ before anything that loses data. Useful flags, passed straight through by pnpm:
 avoid).
 
 **`db:generate` is not currently a working migration path.** It runs without credentials, because it
-only reads `schema.ts` — but there is no `db:migrate` script, so nothing applies what it writes. It
-also has no `dotenv` wrapper and `migrations/` is not gitignored, so running it leaves untracked
-files behind. Prefer `push` unless you are deliberately introducing the versioned workflow.
+only reads `schema.ts` — but nothing applies what it writes. Prefer `push` unless you are
+deliberately introducing the versioned workflow.
+
+### Two directories, two systems
+
+| Directory     | Holds                               | Applied by                               | In git     |
+| ------------- | ----------------------------------- | ---------------------------------------- | ---------- |
+| `migrations/` | hand-written `.sql`                 | `scripts/migrate.mjs`, in filename order | tracked    |
+| `drizzle/`    | whatever `db:generate`/`pull` emits | nothing                                  | gitignored |
+
+They are kept apart on purpose. `drizzle-kit`'s `out` used to be `./migrations` — the same directory
+`migrate.mjs` replays — and drizzle-kit numbers its output from `0000`, so a generated file would
+have sorted _ahead_ of the hand-written `0001_create_counters.sql` and been applied first. Pointing
+`out` at `./drizzle` makes that collision impossible; `migrate.mjs` only ever sees files a human put
+there.
+
+Nothing reads `drizzle/`, so it is safe to delete at any time.
 
 ## Verify the target before you write
 
@@ -138,4 +177,4 @@ await getDb().run('SELECT 1'); // string args are wrapped in sql.raw() internall
 | Push succeeded but the change is on the wrong database       | `TURSO_URL` exported in your shell shadowed the env file; see the override trap                                |
 | `Property 'execute' does not exist on type 'LibSQLDatabase'` | Use `.run()` — see above                                                                                       |
 | `/api/health` returns 503 locally                            | `.env.development` missing or unreachable; detail is in the server console, deliberately not the response body |
-| Untracked `migrations/` appears                              | Something ran `db:generate`; safe to delete unless you are adopting versioned migrations                       |
+| A `drizzle/` directory appears                               | Something ran `db:generate` or `db:pull`; gitignored and applied by nothing — safe to delete                   |
