@@ -2,8 +2,7 @@
 
 A SvelteKit + TypeScript app backed by a Turso (libSQL) database, deployed to Vercel.
 
-Currently a deployable shell: a hello-world page plus a health endpoint. The counter features are
-tracked in issues #4, #5 and #7.
+A shared counter anyone can increment, plus a `/status` page that reads the public API directly.
 
 ## Quickstart
 
@@ -30,6 +29,9 @@ http://localhost:5173 serves the page; `/api/health` reports database connectivi
 CI runs `lint`, `check`, `test` and `build` on every push. Vercel deploys every push independently; `main` is branch-protected on the CI check, so only tested code reaches production. Live at <https://buttoncounter.vercel.app>.
 
 ## API
+
+[`/status`](http://localhost:5173/status) renders both endpoints below as live panels, refreshing
+every five seconds; each panel links to its raw JSON.
 
 All responses are JSON. Success bodies carry `data`; failures carry
 `error: { message, code }`. Both endpoints below send `Cache-Control: no-store` — the health probe
@@ -65,10 +67,15 @@ Counters are also addressable individually: `GET`/`PUT`/`DELETE /api/counters/:i
 ## Layout
 
 ```
-src/lib/server/db.ts        libSQL client (lazily constructed)
-src/routes/+page.svelte     hello-world page
-src/routes/api/health/      health endpoint + its tests
-.github/workflows/ci.yml    lint, typecheck, test, build
+src/routes/+layout.svelte     page chrome (header, nav, footer, background)
+src/routes/+page.svelte       the counter
+src/routes/status/            the status page
+src/routes/api/               counters + health endpoints, each with its tests
+src/lib/components/           ButtonCounter, HealthPanel, CountersPanel, StatCell
+src/lib/status-format.ts      display formatting for the status page (+ its tests)
+src/lib/server/db.ts          libSQL client (lazily constructed)
+src/lib/server/counters.ts    counter queries (hand-written SQL)
+.github/workflows/ci.yml      lint, typecheck, test, build
 .github/workflows/uptime.yml  scheduled health probe
 ```
 

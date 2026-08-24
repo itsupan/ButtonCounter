@@ -1,6 +1,6 @@
 # Testing
 
-ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 8 test
+ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 9 test
 files run against mocked dependencies — no test in the suite talks to a real Turso database.
 
 ## Running tests
@@ -22,6 +22,7 @@ calling work done.
 | `src/lib/server/counters.test.ts`                          | `src/lib/server/counters.ts` — data access layer plus the `parseCounterId`/`isRecord`/`parseListQuery` helpers |
 | `src/lib/server/runtime-info.test.ts`                      | `src/lib/server/runtime-info.ts` — build identity and instance uptime                                          |
 | `src/lib/server/schema.test.ts`                            | `src/lib/server/schema.ts` — that the Drizzle table still matches the real one                                 |
+| `src/lib/status-format.test.ts`                            | `src/lib/status-format.ts` — uptime/latency/relative-time formatting for the status page                       |
 | `src/routes/api/counters/counters.test.ts`                 | `GET`/`POST /api/counters`                                                                                     |
 | `src/routes/api/counters/[id]/counter.test.ts`             | `GET`/`PUT`/`DELETE /api/counters/:id`                                                                         |
 | `src/routes/api/counters/[id]/increment/increment.test.ts` | `POST /api/counters/:id/increment`                                                                             |
@@ -65,6 +66,11 @@ produced by the real query parser, not a stub.
 
 `/api/health` mocks `$lib/server/db` directly (like `counters.test.ts`) since it runs `SELECT 1`
 itself rather than going through the `counters` module.
+
+`status-format.test.ts` mocks nothing either — it is a plain module of pure functions. The status
+page's Svelte components deliberately hold no formatting logic of their own so that the part which
+can actually be wrong (padding, a negative uptime, an unparseable timestamp) is reachable from the
+existing node project; there is no component-test runner in this repo.
 
 `schema.test.ts` mocks nothing — it inspects the Drizzle table definition in memory. Its most
 important assertion is a _type-level_ one: `schema.ts` never executes at request time, so a wrong
