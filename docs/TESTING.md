@@ -1,6 +1,6 @@
 # Testing
 
-ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 7 test
+ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 8 test
 files run against mocked dependencies — no test in the suite talks to a real Turso database.
 
 ## Running tests
@@ -21,6 +21,7 @@ calling work done.
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `src/lib/server/counters.test.ts`                          | `src/lib/server/counters.ts` — data access layer plus the `parseCounterId`/`isRecord`/`parseListQuery` helpers |
 | `src/lib/server/runtime-info.test.ts`                      | `src/lib/server/runtime-info.ts` — build identity and instance uptime                                          |
+| `src/lib/server/schema.test.ts`                            | `src/lib/server/schema.ts` — that the Drizzle table still matches the real one                                 |
 | `src/routes/api/counters/counters.test.ts`                 | `GET`/`POST /api/counters`                                                                                     |
 | `src/routes/api/counters/[id]/counter.test.ts`             | `GET`/`PUT`/`DELETE /api/counters/:id`                                                                         |
 | `src/routes/api/counters/[id]/increment/increment.test.ts` | `POST /api/counters/:id/increment`                                                                             |
@@ -64,6 +65,12 @@ produced by the real query parser, not a stub.
 
 `/api/health` mocks `$lib/server/db` directly (like `counters.test.ts`) since it runs `SELECT 1`
 itself rather than going through the `counters` module.
+
+`schema.test.ts` mocks nothing — it inspects the Drizzle table definition in memory. Its most
+important assertion is a _type-level_ one: `schema.ts` never executes at request time, so a wrong
+column there breaks no test and no endpoint, and surfaces only as DDL when `db:push` diffs it
+against a live database. Equating the table's inferred row type with the `Counter` the API returns
+turns that silent hazard into a `pnpm run check` failure. See `docs/DATABASE.md`.
 
 **Environment-dependent tests** (`runtime-info.test.ts`) mock SvelteKit's env module. The factory
 passed to `vi.mock` is hoisted above ordinary declarations, so the stand-in object has to be created

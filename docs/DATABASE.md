@@ -12,7 +12,7 @@ For how the app itself ships, see `docs/DEPLOYMENT.md`.
 | ----------- | ------------------------------------ | ----------------------------------------------------------------------------- |
 | Database    | Turso / libSQL, `aws-ap-northeast-1` | Serverless SQLite; Vercel functions are pinned to `hnd1` to sit beside it     |
 | Driver      | `@libsql/client`                     | Speaks `libsql://` over HTTP                                                  |
-| ORM         | `drizzle-orm`                        | Typed queries generated from one schema definition                            |
+| ORM         | `drizzle-orm`                        | Connection handling and typing; the counter queries are hand-written SQL      |
 | Schema tool | `drizzle-kit`                        | Diffs `schema.ts` against a live database and emits the DDL                   |
 | Env loading | `dotenv-cli`                         | drizzle-kit is not a Vite process, so it cannot use Vite's `.env.*` selection |
 
@@ -32,16 +32,41 @@ fill in values from the Turso dashboard.
 
 ## Schema
 
-`src/lib/server/schema.ts` is the single source of truth — there is no hand-written SQL. It
-currently defines one table:
+One table, `counters`, created by `migrations/0001_create_counters.sql`:
 
-| Column       | Type      | Notes                                     |
-| ------------ | --------- | ----------------------------------------- |
-| `id`         | `text`    | primary key                               |
-| `name`       | `text`    | not null, unique                          |
-| `count`      | `integer` | not null, defaults to `0`                 |
-| `created_at` | `text`    | not null, defaults to `CURRENT_TIMESTAMP` |
-| `updated_at` | `text`    | not null, defaults to `CURRENT_TIMESTAMP` |
+| Column       | Type      | Notes                                                               |
+| ------------ | --------- | ------------------------------------------------------------------- |
+| `id`         | `integer` | primary key, autoincrement                                          |
+| `name`       | `text`    | not null — deliberately **not** unique, and there is no index on it |
+| `value`      | `integer` | not null, defaults to `0`                                           |
+| `created_at` | `text`    | not null, defaults to `(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`     |
+| `updated_at` | `text`    | not null, defaults to `(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`     |
+
+The timestamp default is ISO-8601 with milliseconds, **not** `CURRENT_TIMESTAMP` — SQLite's
+`CURRENT_TIMESTAMP` yields `YYYY-MM-DD HH:MM:SS`, a different format from what the API returns.
+
+`src/lib/server/schema.ts` mirrors this table for drizzle-kit's benefit, but it is neither the only
+place SQL lives nor the definition the app runs on:
+
+- Request-time queries are hand-written SQL in `src/lib/server/counters.ts`, executed through the
+  raw libSQL client (`getDb().$client`). They never go through Drizzle's query builder.
+- The table was created by the hand-written `migrations/0001_create_counters.sql`, applied with
+  `node --env-file=.env.development scripts/migrate.mjs`.
+
+**That combination is the trap.** Because nothing reads `schema.ts` at request time, an error in it
+cannot fail a test or break an endpoint — it stays invisible until `db:push` diffs it against a live
+database and emits DDL to close the gap. A wrong column name there is a `DROP COLUMN` against
+production. This file did drift once, describing a `text` id and a `count` column that never
+existed; a push would have destroyed the real `value` data.
+
+`src/lib/server/schema.test.ts` is the guard: it asserts the table's inferred row type is exactly
+the `Counter` type the API returns, so the next drift fails `pnpm run check` instead of a
+deployment. To re-check the file against a real database without writing to it, `drizzle-kit pull`
+introspects into a scratch directory — it only reads:
+
+```bash
+pnpm exec dotenv -e .env.development -- drizzle-kit pull --out=/tmp/introspect
+```
 
 ## Applying a schema change
 
@@ -61,6 +86,11 @@ avoid).
 only reads `schema.ts` — but there is no `db:migrate` script, so nothing applies what it writes. It
 also has no `dotenv` wrapper and `migrations/` is not gitignored, so running it leaves untracked
 files behind. Prefer `push` unless you are deliberately introducing the versioned workflow.
+
+Worse, its `out` is `./migrations`, the same directory `scripts/migrate.mjs` replays in sorted
+order. A generated `0000_*.sql` would therefore sort _ahead_ of the hand-written
+`0001_create_counters.sql` and run first. If you do run `db:generate`, send it elsewhere
+(`--out=/tmp/...`) or delete what it leaves behind.
 
 ## Verify the target before you write
 
