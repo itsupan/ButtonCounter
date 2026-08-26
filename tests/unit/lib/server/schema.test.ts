@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getTableColumns } from 'drizzle-orm';
-import { counters } from './schema';
-import type { Counter } from './counters';
+import { counters } from '$lib/server/schema';
+import type { Counter } from '$lib/server/counters';
 
 /**
  * Compile-time guard against the drift this file exists to prevent.

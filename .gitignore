@@ -28,3 +28,6 @@ vite.config.ts.timestamp-*
 
 *.md
 !/docs/*.md
+# Playwright
+test-results
+docs

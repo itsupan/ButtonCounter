@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', () => ({
 // The handler ignores its RequestEvent, so an empty stand-in keeps the test
 // focused on the probe's two outcomes.
 const invoke = async () => {
-	const { GET } = await import('./+server');
+	const { GET } = await import('../../../../../src/routes/api/health/+server');
 	return GET({} as Parameters<typeof GET>[0]);
 };
 

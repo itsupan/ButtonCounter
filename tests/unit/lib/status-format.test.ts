@@ -7,7 +7,7 @@ import {
 	formatRelativeTime,
 	formatUptime,
 	orDash
-} from './status-format';
+} from '$lib/status-format';
 
 describe('formatLatency', () => {
 	it('reports sub-second timings in milliseconds', () => {

@@ -22,13 +22,13 @@ const sampleCounter = {
 // The GET handler reads `url` for its query parameters, so the stand-in event has
 // to carry one.
 const invokeGet = async (search = '') => {
-	const { GET } = await import('./+server');
+	const { GET } = await import('../../../../../src/routes/api/counters/+server');
 	const url = new URL(`http://localhost/api/counters${search}`);
 	return GET({ url } as Parameters<typeof GET>[0]);
 };
 
 const invokePost = async (body: unknown) => {
-	const { POST } = await import('./+server');
+	const { POST } = await import('../../../../../src/routes/api/counters/+server');
 	const request = new Request('http://localhost/api/counters', {
 		method: 'POST',
 		body: JSON.stringify(body)
@@ -164,7 +164,7 @@ describe('POST /api/counters', () => {
 	});
 
 	it('rejects invalid JSON with 400', async () => {
-		const { POST } = await import('./+server');
+		const { POST } = await import('../../../../../src/routes/api/counters/+server');
 		const request = new Request('http://localhost/api/counters', {
 			method: 'POST',
 			body: 'not json'

@@ -5,6 +5,3 @@
 # a build platform may still pin) reads `onlyBuiltDependencies`.
 allowBuilds:
   esbuild: true
-
-onlyBuiltDependencies:
-  - esbuild
