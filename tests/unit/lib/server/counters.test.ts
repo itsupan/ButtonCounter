@@ -19,7 +19,7 @@ import {
 	parseCounterId,
 	parseListQuery,
 	updateCounter
-} from './counters';
+} from '$lib/server/counters';
 
 /** Reads back the SQL the data layer handed to the libSQL client. */
 const lastSql = () => String(execute.mock.calls.at(-1)?.[0]?.sql ?? '');

@@ -1,39 +1,45 @@
 # Testing
 
-ButtonCounter uses Vitest for both server-side unit tests and route handler tests. All 9 test
-files run against mocked dependencies — no test in the suite talks to a real Turso database.
+ButtonCounter uses Vitest for server-side unit tests and route handler tests, all under
+`tests/unit`. It also uses Playwright for browser e2e tests under `tests/e2e`. The unit suite runs
+against mocked dependencies — no unit test talks to a real Turso database.
 
 ## Running tests
 
-| Command                                                     | Purpose                |
-| ----------------------------------------------------------- | ---------------------- |
-| `pnpm run test`                                             | Single run, used in CI |
-| `pnpm run test:unit`                                        | Watch mode             |
-| `pnpm exec vitest run src/routes/api/health/health.test.ts` | Run a single test file |
+| Command                                                           | Purpose                |
+| ----------------------------------------------------------------- | ---------------------- |
+| `pnpm run test`                                                   | Single run, used in CI |
+| `pnpm run test:unit`                                              | Unit watch mode        |
+| `pnpm run test:e2e`                                               | Browser e2e tests      |
+| `pnpm exec vitest run tests/unit/routes/api/health/health.test.ts` | Run a single unit file |
 
-CI runs `lint`, `check`, `test`, `build` in that order via the `Lint, typecheck, test, build`
-check, which gates merges to `main` (see `docs/DEPLOYMENT.md`). Run all four locally before
-calling work done.
+CI runs `lint`, `check`, unit tests, Playwright browser installation, e2e tests, and `build` in
+that order via the `Lint, typecheck, test, build` check, which gates merges to `main` (see
+`docs/DEPLOYMENT.md`). Run the local equivalents before calling work done.
 
 ## How the suite is structured
 
-| Test file                                                  | Covers                                                                                                         |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `src/lib/server/counters.test.ts`                          | `src/lib/server/counters.ts` — data access layer plus the `parseCounterId`/`isRecord`/`parseListQuery` helpers |
-| `src/lib/server/runtime-info.test.ts`                      | `src/lib/server/runtime-info.ts` — build identity and instance uptime                                          |
-| `src/lib/server/schema.test.ts`                            | `src/lib/server/schema.ts` — that the Drizzle table still matches the real one                                 |
-| `src/lib/status-format.test.ts`                            | `src/lib/status-format.ts` — uptime/latency/relative-time formatting for the status page                       |
-| `src/routes/api/counters/counters.test.ts`                 | `GET`/`POST /api/counters`                                                                                     |
-| `src/routes/api/counters/[id]/counter.test.ts`             | `GET`/`PUT`/`DELETE /api/counters/:id`                                                                         |
-| `src/routes/api/counters/[id]/increment/increment.test.ts` | `POST /api/counters/:id/increment`                                                                             |
-| `src/routes/api/counters/[id]/decrement/decrement.test.ts` | `POST /api/counters/:id/decrement`                                                                             |
-| `src/routes/api/health/health.test.ts`                     | `GET /api/health`                                                                                              |
+| Unit test file                                                       | Covers                                                                                                         |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `tests/unit/lib/server/counters.test.ts`                             | `src/lib/server/counters.ts` — data access layer plus the `parseCounterId`/`isRecord`/`parseListQuery` helpers |
+| `tests/unit/lib/server/runtime-info.test.ts`                         | `src/lib/server/runtime-info.ts` — build identity and instance uptime                                          |
+| `tests/unit/lib/server/schema.test.ts`                               | `src/lib/server/schema.ts` — that the Drizzle table still matches the real one                                 |
+| `tests/unit/lib/status-format.test.ts`                               | `src/lib/status-format.ts` — uptime/latency/relative-time formatting for the status page                       |
+| `tests/unit/routes/api/counters/counters.test.ts`                    | `GET`/`POST /api/counters`                                                                                     |
+| `tests/unit/routes/api/counters/[id]/counter.test.ts`                | `GET`/`PUT`/`DELETE /api/counters/:id`                                                                         |
+| `tests/unit/routes/api/counters/[id]/increment/increment.test.ts`    | `POST /api/counters/:id/increment`                                                                             |
+| `tests/unit/routes/api/counters/[id]/decrement/decrement.test.ts`    | `POST /api/counters/:id/decrement`                                                                             |
+| `tests/unit/routes/api/health/health.test.ts`                        | `GET /api/health`                                                                                              |
+| `tests/e2e/counter.e2e.ts`                                           | Home-page counter controls in a real browser with deterministic API responses                                  |
 
 Vitest is configured (in `vite.config.ts`, there is no separate `vitest.config.ts`) with one
-project named `server`, `environment: 'node'`, matching `src/**/*.{test,spec}.{js,ts}` and
-excluding `*.svelte.{test,spec}.{js,ts}` (component tests, once any exist, run under a browser-like
-environment instead). `expect: { requireAssertions: true }` means every `it` block must contain at
-least one assertion — a test that silently asserts nothing fails the run.
+project named `server`, `environment: 'node'`, matching `tests/unit/**/*.{test,spec}.{js,ts}` and
+excluding `*.svelte.{test,spec}.{js,ts}`. `expect: { requireAssertions: true }` means every `it`
+block must contain at least one assertion — a test that silently asserts nothing fails the run.
+
+Playwright is configured in `playwright.config.ts` with `tests/e2e` as the test directory. It builds
+and previews the SvelteKit app before running, and the current browser test mocks `/api/counters`
+inside Playwright so the UI flow is stable without a real Turso database.
 
 ## Two layers of mocking
 

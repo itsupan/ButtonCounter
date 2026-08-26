@@ -7,7 +7,7 @@ const env = vi.hoisted(() => ({}) as Record<string, string | undefined>);
 
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-import { getBuildInfo, getUptimeSeconds } from './runtime-info';
+import { getBuildInfo, getUptimeSeconds } from '$lib/server/runtime-info';
 
 describe('getBuildInfo', () => {
 	beforeEach(() => {

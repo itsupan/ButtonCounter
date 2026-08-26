@@ -18,12 +18,12 @@ const sampleCounter = {
 };
 
 const invokeGet = async (id: string) => {
-	const { GET } = await import('./+server');
+	const { GET } = await import('../../../../../../src/routes/api/counters/[id]/+server');
 	return GET({ params: { id } } as Parameters<typeof GET>[0]);
 };
 
 const invokePut = async (id: string, body: unknown) => {
-	const { PUT } = await import('./+server');
+	const { PUT } = await import('../../../../../../src/routes/api/counters/[id]/+server');
 	const request = new Request(`http://localhost/api/counters/${id}`, {
 		method: 'PUT',
 		body: JSON.stringify(body)
@@ -32,7 +32,7 @@ const invokePut = async (id: string, body: unknown) => {
 };
 
 const invokeDelete = async (id: string) => {
-	const { DELETE } = await import('./+server');
+	const { DELETE } = await import('../../../../../../src/routes/api/counters/[id]/+server');
 	return DELETE({ params: { id } } as Parameters<typeof DELETE>[0]);
 };
 
